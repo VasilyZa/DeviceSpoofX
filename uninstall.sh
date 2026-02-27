@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================
-# Xiaomi 17 Pro Max Device Spoofer
+# DeviceSpoofX
 # uninstall.sh - 卸载清理脚本
 # ============================================
 

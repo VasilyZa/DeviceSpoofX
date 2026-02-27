@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================
-# Xiaomi 17 Pro Max Device Spoofer
+# DeviceSpoofX
 # customize.sh - OverlayFS 模块安装脚本
 # 安装时复制并修改各分区 build.prop
 # 支持 Magisk / KernelSU / APatch
@@ -8,11 +8,10 @@
 
 ui_print ""
 ui_print "╔══════════════════════════════════════╗"
-ui_print "║  Xiaomi 17 Pro Max Device Spoofer    ║"
+ui_print "║        DeviceSpoofX v2.0.0           ║"
 ui_print "║  适配 MIUI 12 ~ HyperOS 3           ║"
 ui_print "║  支持 Magisk / KernelSU / APatch     ║"
 ui_print "║  模式: OverlayFS                     ║"
-ui_print "║  版本: v1.1.0                        ║"
 ui_print "╚══════════════════════════════════════╝"
 ui_print ""
 
@@ -20,18 +19,30 @@ ui_print ""
 # 升级: 强制清理旧版文件
 # ============================================
 
-OLD_MODULE="/data/adb/modules/Xiaomi17ProMax"
+OLD_MODULE="/data/adb/modules/DeviceSpoofX"
+OLD_MODULE_LEGACY="/data/adb/modules/Xiaomi17ProMax"
+
+# 清理当前版本旧文件
 if [ -d "$OLD_MODULE" ]; then
     ui_print "- 检测到旧版模块，清理旧文件..."
     rm -rf "$OLD_MODULE/webroot" 2>/dev/null
     rm -rf "$OLD_MODULE/system" 2>/dev/null
     rm -f "$OLD_MODULE/is_hyperos3" 2>/dev/null
-    # 保留用户配置: adb_root_enabled
     if [ -f "$OLD_MODULE/adb_root_enabled" ]; then
         ADB_ROOT_WAS_ON="true"
         ui_print "  保留 ADB Root 配置"
     fi
     ui_print "  旧版文件已清理"
+fi
+
+# 清理旧名称模块残留
+if [ -d "$OLD_MODULE_LEGACY" ]; then
+    ui_print "- 检测到旧版 Xiaomi17ProMax 模块，清理..."
+    if [ -f "$OLD_MODULE_LEGACY/adb_root_enabled" ]; then
+        ADB_ROOT_WAS_ON="true"
+    fi
+    rm -rf "$OLD_MODULE_LEGACY" 2>/dev/null
+    ui_print "  旧版模块已清理"
 fi
 
 # ============================================

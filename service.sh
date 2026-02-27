@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================
-# Xiaomi 17 Pro Max Device Spoofer
+# DeviceSpoofX
 # service.sh - 启动完成后执行
 # 修改 Settings 数据库及持久化属性
 # 支持 Magisk / KernelSU / APatch

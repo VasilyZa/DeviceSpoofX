@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================
-# Xiaomi 17 Pro Max Device Spoofer (OverlayFS)
+# DeviceSpoofX (OverlayFS)
 # post-fs-data.sh - OverlayFS 补漏
 # 仅处理 build.prop 覆盖无法生效的属性
 # ============================================
