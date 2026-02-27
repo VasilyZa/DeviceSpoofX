@@ -55,3 +55,14 @@ if [ -f "$MODDIR/is_hyperos3" ]; then
     $RESETPROP_BIN -n ro.mi.os.version.code "17"
     $RESETPROP_BIN -n ro.build.display.id "$TARGET_DISPLAY_ID"
 fi
+
+# ============================================
+# ADB Root 调试 (WebUI 开关控制)
+# 在非 userdebug 构建上启用 adb root
+# ============================================
+
+if [ -f "$MODDIR/adb_root_enabled" ]; then
+    $RESETPROP_BIN ro.debuggable 1
+    $RESETPROP_BIN ro.secure 0
+    $RESETPROP_BIN ro.adb.secure 0
+fi

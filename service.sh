@@ -79,3 +79,13 @@ settings put secure bluetooth_name "$TARGET_MARKETNAME"
 
 # WIFI Direct 设备名称
 settings put global wifi_p2p_device_name "$TARGET_MARKETNAME"
+
+# ============================================
+# ADB Root 调试 (WebUI 开关控制)
+# ============================================
+
+if [ -f "$MODDIR/adb_root_enabled" ] && [ -n "$RESETPROP_BIN" ]; then
+    $RESETPROP_BIN service.adb.root 1
+    stop adbd
+    start adbd
+fi

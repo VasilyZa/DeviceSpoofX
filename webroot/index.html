@@ -240,6 +240,64 @@
             color: var(--s-color-on-surface, #1a1a1a);
         }
 
+        /* ---- 功能开关卡片 ---- */
+        .toggle-card {
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+        .toggle-card-inner {
+            padding: 20px;
+        }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .toggle-info { flex: 1; }
+        .toggle-title {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--s-color-on-surface, #1a1a1a);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toggle-desc {
+            font-size: 0.78rem;
+            color: var(--s-color-on-surface-variant, #666);
+            margin-top: 4px;
+            line-height: 1.5;
+        }
+        .toggle-status {
+            font-size: 0.76rem;
+            font-weight: 500;
+            padding: 3px 10px;
+            border-radius: 12px;
+            margin-top: 8px;
+            display: inline-block;
+        }
+        .toggle-status.on {
+            background: var(--s-color-primary-container, #e8e0ff);
+            color: var(--s-color-on-primary-container, #4a3880);
+        }
+        .toggle-status.off {
+            background: var(--s-color-surface-variant, #e7e0ec);
+            color: var(--s-color-on-surface-variant, #666);
+        }
+        .toggle-warn {
+            font-size: 0.74rem;
+            color: var(--s-color-error, #ba1a1a);
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: var(--s-color-error-container, #ffdad6);
+            line-height: 1.5;
+            display: none;
+        }
+        .toggle-warn.show { display: block; }
+
         /* ---- 底部信息 ---- */
         .footer {
             text-align: center;
@@ -391,12 +449,31 @@
             </div>
         </s-card>
 
+        <!-- 功能开关 -->
+        <div class="section-title anim-item" style="animation-delay:.35s">功能开关</div>
+        <s-card class="toggle-card anim-item" type="outlined" style="animation-delay:.38s">
+            <div class="toggle-card-inner">
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <div class="toggle-title">
+                            <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-480H160v480Zm140-40h320v-60H300v60ZM360-450l-56-56 63-64-63-64 56-56 120 120-120 120Zm-200 210v-480 480Z"/></svg>
+                            ADB Root 调试
+                        </div>
+                        <div class="toggle-desc">在非 userdebug 构建上启用 adb root 权限，允许通过 ADB 获取 root shell</div>
+                        <div class="toggle-status off" id="adbRootStatus">已关闭</div>
+                    </div>
+                    <s-switch id="adbRootSwitch"></s-switch>
+                </div>
+                <div class="toggle-warn" id="adbRootWarn">注意：开启后 ADB 连接将短暂断开并重新建立，此为正常现象。重启后设置仍然生效。</div>
+            </div>
+        </s-card>
+
         <!-- 修改属性列表 -->
-        <div class="section-title anim-item" style="animation-delay:.38s">已修改属性</div>
-        <div id="propGroups" class="anim-item" style="animation-delay:.42s"></div>
+        <div class="section-title anim-item" style="animation-delay:.42s">已修改属性</div>
+        <div id="propGroups" class="anim-item" style="animation-delay:.46s"></div>
 
         <!-- 底部 -->
-        <div class="footer anim-item" style="animation-delay:.48s">
+        <div class="footer anim-item" style="animation-delay:.52s">
             Xiaomi 17 Pro Max Device Spoofer v1.1.0<br>
             Powered by Sober UI · Made with ❤
         </div>
@@ -612,6 +689,68 @@ async function checkModuleStatus() {
 }
 
 // ============================================================
+//  ADB Root 调试开关
+// ============================================================
+async function checkAdbRoot() {
+    const { errno } = await exec(`[ -f "${MODULE_DIR}/adb_root_enabled" ]`);
+    return errno === 0;
+}
+
+function updateAdbRootUI(enabled) {
+    const sw = document.getElementById('adbRootSwitch');
+    const status = document.getElementById('adbRootStatus');
+    const warn = document.getElementById('adbRootWarn');
+    sw.checked = enabled;
+    if (enabled) {
+        status.textContent = '已开启';
+        status.className = 'toggle-status on';
+        warn.classList.add('show');
+    } else {
+        status.textContent = '已关闭';
+        status.className = 'toggle-status off';
+        warn.classList.remove('show');
+    }
+}
+
+async function toggleAdbRoot(enable) {
+    if (enable) {
+        // 开启: 创建标记文件 + 立即应用属性 + 重启 adbd
+        const { errno } = await exec(`
+            echo 1 > "${MODULE_DIR}/adb_root_enabled" &&
+            resetprop ro.debuggable 1 &&
+            resetprop ro.secure 0 &&
+            resetprop ro.adb.secure 0 &&
+            resetprop service.adb.root 1 &&
+            stop adbd && start adbd
+        `);
+        if (errno === 0) {
+            showToast('ADB Root 已开启');
+            updateAdbRootUI(true);
+        } else {
+            showToast('开启失败');
+            updateAdbRootUI(false);
+        }
+    } else {
+        // 关闭: 删除标记文件 + 恢复属性 + 重启 adbd
+        const { errno } = await exec(`
+            rm -f "${MODULE_DIR}/adb_root_enabled" &&
+            resetprop ro.debuggable 0 &&
+            resetprop ro.secure 1 &&
+            resetprop ro.adb.secure 1 &&
+            resetprop service.adb.root 0 &&
+            stop adbd && start adbd
+        `);
+        if (errno === 0) {
+            showToast('ADB Root 已关闭');
+            updateAdbRootUI(false);
+        } else {
+            showToast('关闭失败');
+            updateAdbRootUI(true);
+        }
+    }
+}
+
+// ============================================================
 //  主逻辑
 // ============================================================
 async function loadAll() {
@@ -624,10 +763,11 @@ async function loadAll() {
     ];
     const mergedKeys = [...new Set([...allKeys, ...infoKeys])];
 
-    const [vals, rootSolution, moduleActive] = await Promise.all([
+    const [vals, rootSolution, moduleActive, adbRootEnabled] = await Promise.all([
         getProps(mergedKeys),
         detectRoot(),
         checkModuleStatus(),
+        checkAdbRoot(),
     ]);
 
     // Hero 状态
@@ -664,6 +804,9 @@ async function loadAll() {
         h3El.style.color = 'var(--s-color-on-surface-variant, #666)';
     }
 
+    // ADB Root 状态
+    updateAdbRootUI(adbRootEnabled);
+
     // 属性分组
     renderPropGroups(vals);
 
@@ -689,6 +832,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('loadingOverlay').classList.remove('hide');
         await loadAll();
         showToast('已刷新');
+    });
+
+    // ADB Root 开关
+    document.getElementById('adbRootSwitch').addEventListener('change', async (e) => {
+        const sw = e.target;
+        const enable = sw.checked;
+        sw.disabled = true;
+        await toggleAdbRoot(enable);
+        sw.disabled = false;
     });
 });
 </script>
