@@ -462,7 +462,7 @@
                         <div class="toggle-desc">在非 userdebug 构建上启用 adb root 权限，允许通过 ADB 获取 root shell</div>
                         <div class="toggle-status off" id="adbRootStatus">已关闭</div>
                     </div>
-                    <s-switch id="adbRootSwitch"></s-switch>
+                    <s-switch id="adbRootSwitch" style="color: #e65100"></s-switch>
                 </div>
                 <div class="toggle-warn" id="adbRootWarn">注意：开启后 ADB 连接将短暂断开并重新建立，此为正常现象。重启后设置仍然生效。</div>
             </div>
@@ -700,12 +700,13 @@ function updateAdbRootUI(enabled) {
     const sw = document.getElementById('adbRootSwitch');
     const status = document.getElementById('adbRootStatus');
     const warn = document.getElementById('adbRootWarn');
-    sw.checked = enabled;
     if (enabled) {
+        sw.setAttribute('checked', '');
         status.textContent = '已开启';
         status.className = 'toggle-status on';
         warn.classList.add('show');
     } else {
+        sw.removeAttribute('checked');
         status.textContent = '已关闭';
         status.className = 'toggle-status off';
         warn.classList.remove('show');
@@ -837,10 +838,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ADB Root 开关
     document.getElementById('adbRootSwitch').addEventListener('change', async (e) => {
         const sw = e.target;
-        const enable = sw.checked;
-        sw.disabled = true;
+        const enable = sw.hasAttribute('checked');
+        sw.style.pointerEvents = 'none';
         await toggleAdbRoot(enable);
-        sw.disabled = false;
+        sw.style.pointerEvents = '';
     });
 });
 </script>
