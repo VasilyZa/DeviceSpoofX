@@ -298,6 +298,64 @@
         }
         .toggle-warn.show { display: block; }
 
+        /* ---- 原生滑块开关 ---- */
+        .md-switch {
+            position: relative;
+            width: 52px;
+            height: 32px;
+            flex-shrink: 0;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .md-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+        .md-switch .track {
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            background: var(--s-color-surface-variant, #e0dce4);
+            border: 2px solid var(--s-color-outline, #79747e);
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .md-switch .thumb {
+            position: absolute;
+            top: 50%;
+            left: 6px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--s-color-outline, #79747e);
+            transform: translateY(-50%);
+            transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                        width 0.2s, height 0.2s,
+                        background 0.2s;
+        }
+        .md-switch input:checked ~ .track {
+            background: #e65100;
+            border-color: #e65100;
+        }
+        .md-switch input:checked ~ .thumb {
+            left: 28px;
+            width: 24px;
+            height: 24px;
+            background: #fff;
+        }
+        .md-switch:active .thumb {
+            width: 28px;
+            height: 28px;
+        }
+        .md-switch input:checked ~ .track ~ .thumb,
+        .md-switch input:checked + .track + .thumb {
+            left: 28px;
+        }
+        .md-switch:active input:checked ~ .thumb {
+            left: 22px;
+        }
+
         /* ---- 底部信息 ---- */
         .footer {
             text-align: center;
@@ -462,7 +520,11 @@
                         <div class="toggle-desc">在非 userdebug 构建上启用 adb root 权限，允许通过 ADB 获取 root shell</div>
                         <div class="toggle-status off" id="adbRootStatus">已关闭</div>
                     </div>
-                    <s-switch id="adbRootSwitch" style="color: #e65100"></s-switch>
+                    <label class="md-switch" id="adbRootSwitch">
+                        <input type="checkbox" id="adbRootCheckbox">
+                        <div class="track"></div>
+                        <div class="thumb"></div>
+                    </label>
                 </div>
                 <div class="toggle-warn" id="adbRootWarn">注意：开启后 ADB 连接将短暂断开并重新建立，此为正常现象。重启后设置仍然生效。</div>
             </div>
@@ -697,10 +759,10 @@ async function checkAdbRoot() {
 }
 
 function updateAdbRootUI(enabled) {
-    const sw = document.getElementById('adbRootSwitch');
+    const cb = document.getElementById('adbRootCheckbox');
     const status = document.getElementById('adbRootStatus');
     const warn = document.getElementById('adbRootWarn');
-    sw.checked = enabled;
+    cb.checked = enabled;
     if (enabled) {
         status.textContent = '已开启';
         status.className = 'toggle-status on';
@@ -835,12 +897,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ADB Root 开关
-    document.getElementById('adbRootSwitch').addEventListener('change', async () => {
-        const sw = document.getElementById('adbRootSwitch');
-        const enable = sw.checked;
-        sw.disabled = true;
+    document.getElementById('adbRootCheckbox').addEventListener('change', async (e) => {
+        const cb = e.target;
+        const enable = cb.checked;
+        cb.disabled = true;
         await toggleAdbRoot(enable);
-        sw.disabled = false;
+        cb.disabled = false;
     });
 });
 </script>
