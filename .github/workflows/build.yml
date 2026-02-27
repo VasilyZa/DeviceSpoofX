@@ -9,6 +9,8 @@ on:
       - 'service.sh'
       - 'customize.sh'
       - 'uninstall.sh'
+      - 'current_profile'
+      - 'profiles/**'
       - 'webroot/**'
       - 'META-INF/**'
   workflow_dispatch:
@@ -59,7 +61,8 @@ jobs:
 
           MODULE_PATHS=(
             module.prop post-fs-data.sh service.sh
-            customize.sh uninstall.sh webroot/ META-INF/
+            customize.sh uninstall.sh current_profile
+            profiles/ webroot/ META-INF/
           )
 
           CHANGED=false
@@ -333,6 +336,8 @@ jobs:
             service.sh
             customize.sh
             uninstall.sh
+            current_profile
+            profiles/xiaomi-17-pro-max.conf
             webroot/index.html
           )
 

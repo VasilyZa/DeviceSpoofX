@@ -7,13 +7,14 @@
 
 MODDIR=${0%/*}
 
-TARGET_MODEL="2509FPN0BC"
-TARGET_DEVICE="popsicle"
-TARGET_NAME="popsicle"
-TARGET_BRAND="Xiaomi"
-TARGET_MANUFACTURER="Xiaomi"
-TARGET_MARKETNAME="Xiaomi 17 Pro Max"
-TARGET_DISPLAY_ID="OS3.0.45.0.WPBCNXM"
+# ============================================
+# 加载设备配置文件
+# ============================================
+
+PROFILE_KEY=$(cat "$MODDIR/current_profile" 2>/dev/null | tr -d '\r\n')
+PROFILE_CONF="$MODDIR/profiles/${PROFILE_KEY}.conf"
+[ ! -f "$PROFILE_CONF" ] && exit 0
+. "$PROFILE_CONF"
 
 # ============================================
 # resetprop 自动寻址
@@ -93,6 +94,15 @@ $RESETPROP_BIN -n ro.product.marketname "$TARGET_MARKETNAME"
 $RESETPROP_BIN -n ro.product.odm.marketname "$TARGET_MARKETNAME"
 $RESETPROP_BIN -n ro.product.vendor.marketname "$TARGET_MARKETNAME"
 $RESETPROP_BIN -n ro.product.system.marketname "$TARGET_MARKETNAME"
+
+# ============================================
+# 运行内存 (RAM)
+# ============================================
+
+if [ -n "$TARGET_RAM" ]; then
+    $RESETPROP_BIN -n ro.boot.ddrsize "$TARGET_RAM"
+    $RESETPROP_BIN -n ro.boot.ddr_size "$TARGET_RAM"
+fi
 
 # ============================================
 # HyperOS 3 版本号（仅在安装时检测到时执行）

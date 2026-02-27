@@ -5,12 +5,28 @@
 # 支持 Magisk / KernelSU / APatch
 # ============================================
 
+# ============================================
+# 加载设备配置文件
+# ============================================
+
+PROFILE_KEY=$(cat "$MODPATH/current_profile" 2>/dev/null | tr -d '\r\n')
+PROFILE_CONF="$MODPATH/profiles/${PROFILE_KEY}.conf"
+
+if [ ! -f "$PROFILE_CONF" ]; then
+    ui_print "! 错误: 找不到配置文件 ${PROFILE_KEY}.conf"
+    abort "! 安装中止"
+fi
+
+. "$PROFILE_CONF"
+
 ui_print ""
 ui_print "╔══════════════════════════════════════╗"
 ui_print "║        DeviceSpoofX v2.0.0           ║"
 ui_print "║  适配 MIUI 12 ~ HyperOS 3           ║"
 ui_print "║  支持 Magisk / KernelSU / APatch     ║"
 ui_print "╚══════════════════════════════════════╝"
+ui_print ""
+ui_print "- 当前配置: $PROFILE_NAME"
 ui_print ""
 
 # ============================================
@@ -35,14 +51,6 @@ if [ -d "$OLD_MODULE_LEGACY" ]; then
     rm -rf "$OLD_MODULE_LEGACY" 2>/dev/null
     ui_print "  旧版模块已清理"
 fi
-
-# ============================================
-# 目标设备参数
-# ============================================
-
-TARGET_MODEL="2509FPN0BC"
-TARGET_DEVICE="popsicle"
-TARGET_MARKETNAME="Xiaomi 17 Pro Max"
 
 # ============================================
 # Root 方案检测

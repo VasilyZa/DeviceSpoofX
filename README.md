@@ -1,19 +1,21 @@
 # DeviceSpoofX
 
-将当前 Android 设备伪装为 **Xiaomi 17 Pro Max**，通过 `resetprop` 在每次启动时直接注入系统属性，全面修改系统上报的设备型号、代号、品牌、营销名称等信息。适配 MIUI 12 至 HyperOS 3，支持 Magisk / KernelSU / APatch 三大 Root 方案，提供 WebUI 管理界面。
+将当前 Android 设备伪装为指定机型，通过 `resetprop` 在每次启动时直接注入系统属性，全面修改系统上报的设备型号、代号、品牌、营销名称、运行内存等信息。适配 MIUI 12 至 HyperOS 3，支持 Magisk / KernelSU / APatch 三大 Root 方案，提供 WebUI 管理界面。
 
 
 ## 功能概述
 
 - 使用 `resetprop` 直接注入 system、vendor、product、odm、system_ext 全部分区的设备属性
+- 伪装运行内存 (RAM) 显示大小
 - 自动检测 HyperOS 3 并同步修改系统版本号
 - 修改 Settings 数据库中的设备名称、蓝牙名称、WiFi Direct 名称
-- 内置 WebUI 管理界面，可在 Root 管理器中直接查看伪装状态和属性详情
+- 设备配置文件独立存放，支持多机型扩展
+- 内置 WebUI 管理界面，自动读取当前配置文件展示伪装状态
 - 安装时自动清理旧版模块文件，支持平滑升级
 - 卸载后重启即可完全恢复原始设备信息
 
 
-## 伪装目标参数
+## 当前内置机型
 
 | 属性         | 值                       |
 |:-------------|:-------------------------|
@@ -22,6 +24,7 @@
 | 设备代号     | popsicle                 |
 | 品牌         | Xiaomi                   |
 | 制造商       | Xiaomi                   |
+| 运行内存     | 16GB                     |
 | HyperOS 版本 | OS3.0.45.0.WPBCNXM       |
 
 
@@ -55,7 +58,10 @@ DeviceSpoofX/
 │       ├── update-binary
 │       └── updater-script
 ├── module.prop                # 模块元信息
-├── customize.sh               # 安装脚本（环境检测、HyperOS 3 标记）
+├── current_profile            # 当前激活的配置名
+├── profiles/                  # 设备配置文件目录
+│   └── xiaomi-17-pro-max.conf
+├── customize.sh               # 安装脚本（加载配置、环境检测）
 ├── post-fs-data.sh            # 早期启动属性注入（resetprop 主力）
 ├── service.sh                 # 启动完成后修改 Settings 数据库
 ├── uninstall.sh               # 卸载清理
@@ -63,13 +69,32 @@ DeviceSpoofX/
     └── index.html             # WebUI 管理界面
 ```
 
+### 设备配置文件
+
+每个机型对应一个 `.conf` 文件，存放在 `profiles/` 目录下，格式如下：
+
+```bash
+PROFILE_NAME="Xiaomi 17 Pro Max"
+TARGET_MODEL="2509FPN0BC"
+TARGET_DEVICE="popsicle"
+TARGET_NAME="popsicle"
+TARGET_BRAND="Xiaomi"
+TARGET_MANUFACTURER="Xiaomi"
+TARGET_MARKETNAME="Xiaomi 17 Pro Max"
+TARGET_DISPLAY_ID="OS3.0.45.0.WPBCNXM"
+TARGET_HOSTNAME="Xiaomi-17-Pro-Max"
+TARGET_RAM="17179869184"
+```
+
+`current_profile` 文件中存放当前激活的配置名（如 `xiaomi-17-pro-max`），所有脚本和 WebUI 根据此文件加载对应配置。新增机型只需添加 `.conf` 文件并修改 `current_profile`。
+
 ### 工作原理
 
-1. **安装阶段** (`customize.sh`)：检测当前设备信息和 Root 方案，判断是否为 HyperOS 3 并写入标记文件，清理旧版模块残留。
+1. **安装阶段** (`customize.sh`)：加载设备配置文件，检测当前设备信息和 Root 方案，判断是否为 HyperOS 3 并写入标记文件，清理旧版模块残留。
 
-2. **早期启动** (`post-fs-data.sh`)：使用 `resetprop -n` 直接注入所有目标属性，覆盖 system、vendor、product、odm、system_ext 全部分区的型号、代号、品牌、营销名称等。若检测到 HyperOS 3 标记，同时注入系统版本号属性。
+2. **早期启动** (`post-fs-data.sh`)：加载设备配置文件，使用 `resetprop -n` 直接注入所有目标属性，包括型号、代号、品牌、营销名称、运行内存等。若检测到 HyperOS 3 标记，同时注入系统版本号属性。
 
-3. **启动完成** (`service.sh`)：等待系统启动完毕后，通过 `settings put` 修改 Settings 数据库中的设备名称、蓝牙名称、WiFi Direct 设备名称，并通过 `resetprop` 设置持久化属性。
+3. **启动完成** (`service.sh`)：加载设备配置文件，等待系统启动完毕后，通过 `settings put` 修改 Settings 数据库中的设备名称、蓝牙名称、WiFi Direct 设备名称，并通过 `resetprop` 设置持久化属性和网络主机名。
 
 4. **卸载** (`uninstall.sh`)：清除持久化属性并删除模块文件，重启后系统自动恢复原始值。
 
@@ -77,6 +102,7 @@ DeviceSpoofX/
 
 基于 Vue 3 和 TDesign Mobile Vue 构建，通过 KernelSU/APatch 的 JavaScript Bridge 与系统交互。功能包括：
 
+- 动态读取 `current_profile` 和对应配置文件，展示当前伪装目标
 - 显示模块激活状态和 Root 方案信息
 - 展示伪装目标参数和当前系统属性对比
 - 分组展示所有已修改的系统属性及其当前值

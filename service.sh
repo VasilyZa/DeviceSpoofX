@@ -8,7 +8,14 @@
 
 MODDIR=${0%/*}
 
-TARGET_MARKETNAME="Xiaomi 17 Pro Max"
+# ============================================
+# 加载设备配置文件
+# ============================================
+
+PROFILE_KEY=$(cat "$MODDIR/current_profile" 2>/dev/null | tr -d '\r\n')
+PROFILE_CONF="$MODDIR/profiles/${PROFILE_KEY}.conf"
+[ ! -f "$PROFILE_CONF" ] && exit 0
+. "$PROFILE_CONF"
 
 # ============================================
 # resetprop 自动寻址（兼容三大 Root 方案）
@@ -63,11 +70,11 @@ settings put global device_name "$TARGET_MARKETNAME"
 if [ -n "$RESETPROP_BIN" ]; then
     $RESETPROP_BIN persist.sys.device_name "$TARGET_MARKETNAME"
     # 网络主机名
-    $RESETPROP_BIN net.hostname "Xiaomi-17-Pro-Max"
+    $RESETPROP_BIN net.hostname "$TARGET_HOSTNAME"
 else
     # 回退: 使用 setprop（service 阶段可用，但无法修改 ro.* 属性）
     setprop persist.sys.device_name "$TARGET_MARKETNAME"
-    setprop net.hostname "Xiaomi-17-Pro-Max"
+    setprop net.hostname "$TARGET_HOSTNAME"
 fi
 
 # ============================================

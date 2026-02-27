@@ -580,21 +580,57 @@ async function getProps(keys) {
 }
 
 // ============================================================
-//  设备配置文件（多机型扩展预留）
+//  读取设备配置文件
 // ============================================================
-const DEVICE_PROFILES = {
-    'xiaomi-17-pro-max': {
-        marketname: 'Xiaomi 17 Pro Max',
-        model: '2509FPN0BC',
-        device: 'popsicle',
-        brand: 'Xiaomi',
-        manufacturer: 'Xiaomi',
-        displayId: 'OS3.0.45.0.WPBCNXM',
-    },
-    // 后续可扩展更多机型配置...
+const MODULE_ID = 'DeviceSpoofX';
+const MODULE_DIR = `/data/adb/modules/${MODULE_ID}`;
+
+const DEFAULT_PROFILE = {
+    marketname: 'Xiaomi 17 Pro Max',
+    model: '2509FPN0BC',
+    device: 'popsicle',
+    brand: 'Xiaomi',
+    manufacturer: 'Xiaomi',
+    displayId: 'OS3.0.45.0.WPBCNXM',
+    hostname: 'Xiaomi-17-Pro-Max',
+    ram: '17179869184',
 };
 
-const CURRENT_PROFILE_KEY = 'xiaomi-17-pro-max';
+function parseProfile(text) {
+    const p = {};
+    const map = {
+        PROFILE_NAME: 'marketname',
+        TARGET_MODEL: 'model',
+        TARGET_DEVICE: 'device',
+        TARGET_NAME: 'name',
+        TARGET_BRAND: 'brand',
+        TARGET_MANUFACTURER: 'manufacturer',
+        TARGET_MARKETNAME: 'marketname',
+        TARGET_DISPLAY_ID: 'displayId',
+        TARGET_HOSTNAME: 'hostname',
+        TARGET_RAM: 'ram',
+    };
+    text.split('\n').forEach(line => {
+        line = line.trim();
+        if (!line || line.startsWith('#')) return;
+        const eq = line.indexOf('=');
+        if (eq < 0) return;
+        const key = line.substring(0, eq);
+        const val = line.substring(eq + 1).replace(/^["']|["']$/g, '');
+        if (map[key]) p[map[key]] = val;
+    });
+    return p;
+}
+
+async function loadProfile() {
+    const { stdout: profileKey } = await exec(`cat ${MODULE_DIR}/current_profile 2>/dev/null`);
+    const key = profileKey.trim();
+    if (!key) return DEFAULT_PROFILE;
+    const { errno, stdout } = await exec(`cat ${MODULE_DIR}/profiles/${key}.conf 2>/dev/null`);
+    if (errno !== 0 || !stdout.trim()) return DEFAULT_PROFILE;
+    const parsed = parseProfile(stdout);
+    return Object.keys(parsed).length > 0 ? { ...DEFAULT_PROFILE, ...parsed } : DEFAULT_PROFILE;
+}
 
 // ============================================================
 //  属性分组定义
@@ -680,8 +716,6 @@ async function detectRoot() {
 // ============================================================
 //  检测模块状态
 // ============================================================
-const MODULE_ID = 'DeviceSpoofX';
-const MODULE_DIR = `/data/adb/modules/${MODULE_ID}`;
 
 async function checkModuleStatus() {
     const { errno } = await exec(`[ -d "${MODULE_DIR}" ] && [ ! -f "${MODULE_DIR}/disable" ]`);
@@ -695,7 +729,7 @@ const { createApp, ref, reactive, computed, onMounted } = Vue;
 
 const app = createApp({
     setup() {
-        const profile = DEVICE_PROFILES[CURRENT_PROFILE_KEY];
+        const profile = reactive({ ...DEFAULT_PROFILE });
         const loading = ref(true);
         const refreshing = ref(false);
         const moduleActive = ref(false);
@@ -760,12 +794,14 @@ const app = createApp({
             ];
             const mergedKeys = [...new Set([...allKeys, ...infoKeys])];
 
-            const [vals, root, active] = await Promise.all([
+            const [vals, root, active, profileData] = await Promise.all([
                 getProps(mergedKeys),
                 detectRoot(),
                 checkModuleStatus(),
+                loadProfile(),
             ]);
 
+            Object.assign(profile, profileData);
             Object.assign(propValues, vals);
             rootSolution.value = root;
             moduleActive.value = active;
