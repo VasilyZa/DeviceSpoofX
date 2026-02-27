@@ -1,40 +1,216 @@
-name: Build Module
+name: Build & Release
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    paths:
+      - 'module.prop'
+      - 'system.prop'
+      - 'post-fs-data.sh'
+      - 'service.sh'
+      - 'customize.sh'
+      - 'uninstall.sh'
+      - 'webroot/**'
+      - 'META-INF/**'
   workflow_dispatch:
 
 jobs:
-  build:
+  # ==========================================
+  # 阶段 1: 变更检测
+  # ==========================================
+  check:
+    name: Check Changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.diff.outputs.should_build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect module changes
+        id: diff
+        run: |
+          # 获取上一个 Release tag
+          LAST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous release found, will build."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Last release tag: $LAST_TAG"
+
+          # 比较模块源文件是否有变更
+          MODULE_PATHS=(
+            module.prop system.prop post-fs-data.sh service.sh
+            customize.sh uninstall.sh webroot/ META-INF/
+          )
+
+          CHANGED=false
+          for p in "${MODULE_PATHS[@]}"; do
+            if ! git diff --quiet "$LAST_TAG" HEAD -- "$p" 2>/dev/null; then
+              CHANGED=true
+              echo "Changed: $p"
+            fi
+          done
+
+          if [ "$CHANGED" = "true" ]; then
+            echo "Module files changed since $LAST_TAG, will build."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No module changes since $LAST_TAG, skipping."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ==========================================
+  # 阶段 2: 代码检查
+  # ==========================================
+  lint:
+    name: Code Check
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: ShellCheck
+        run: |
+          echo "=== ShellCheck ==="
+          SCRIPTS=(post-fs-data.sh service.sh customize.sh uninstall.sh)
+          FAILED=false
+          for script in "${SCRIPTS[@]}"; do
+            echo "--- Checking: $script ---"
+            # SC2034: unused variable (常见于模块模板)
+            # SC2086: word splitting (resetprop 需要)
+            # SC2169: dash 兼容性 (Android sh 基于 mksh)
+            if shellcheck -e SC2034,SC2086,SC2169,SC3043,SC3010 -s sh "$script"; then
+              echo "PASS: $script"
+            else
+              echo "WARN: $script (non-blocking)"
+            fi
+          done
+
+      - name: Validate module.prop
+        run: |
+          echo "=== Validate module.prop ==="
+          REQUIRED_FIELDS=(id name version versionCode author description)
+          for field in "${REQUIRED_FIELDS[@]}"; do
+            VALUE=$(grep "^${field}=" module.prop | cut -d'=' -f2-)
+            if [ -z "$VALUE" ]; then
+              echo "FAIL: missing field '${field}'"
+              exit 1
+            fi
+            echo "OK: ${field}=${VALUE}"
+          done
+
+          # 检查 id 格式
+          MODULE_ID=$(grep '^id=' module.prop | cut -d'=' -f2)
+          if ! echo "$MODULE_ID" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]+$'; then
+            echo "FAIL: invalid module id format '${MODULE_ID}'"
+            exit 1
+          fi
+          echo "OK: id format valid"
+
+          # 检查 versionCode 是整数
+          VERSION_CODE=$(grep '^versionCode=' module.prop | cut -d'=' -f2)
+          if ! echo "$VERSION_CODE" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: versionCode must be integer, got '${VERSION_CODE}'"
+            exit 1
+          fi
+          echo "OK: versionCode is integer"
+
+      - name: Validate ZIP structure
+        run: |
+          echo "=== Validate module files ==="
+          REQUIRED=(
+            META-INF/com/google/android/update-binary
+            META-INF/com/google/android/updater-script
+            module.prop
+          )
+          for f in "${REQUIRED[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "FAIL: missing required file: $f"
+              exit 1
+            fi
+            echo "OK: $f"
+          done
+
+          # updater-script 必须包含 #MAGISK
+          if ! head -1 META-INF/com/google/android/updater-script | grep -q '#MAGISK'; then
+            echo "FAIL: updater-script must start with #MAGISK"
+            exit 1
+          fi
+          echo "OK: updater-script format valid"
+
+  # ==========================================
+  # 阶段 3: 构建 & 发布
+  # ==========================================
+  build-release:
+    name: Build & Release
+    needs: [ check, lint ]
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Get module info
         id: info
         run: |
-          # 从 module.prop 读取模块 ID 和版本号
           MODULE_ID=$(grep '^id=' module.prop | cut -d'=' -f2)
           MODULE_VER=$(grep '^version=' module.prop | cut -d'=' -f2)
+          MODULE_NAME=$(grep '^name=' module.prop | cut -d'=' -f2-)
+          MODULE_DESC=$(grep '^description=' module.prop | cut -d'=' -f2-)
           SHORT_SHA=$(git rev-parse --short HEAD)
+          FULL_SHA=$(git rev-parse HEAD)
           FILENAME="${MODULE_ID}-${MODULE_VER}-${SHORT_SHA}"
+          TAG_NAME="${MODULE_VER}"
+          BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
 
           echo "module_id=${MODULE_ID}" >> "$GITHUB_OUTPUT"
           echo "module_ver=${MODULE_VER}" >> "$GITHUB_OUTPUT"
+          echo "module_name=${MODULE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "module_desc=${MODULE_DESC}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "full_sha=${FULL_SHA}" >> "$GITHUB_OUTPUT"
           echo "filename=${FILENAME}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
 
-          echo "Module: ${MODULE_ID}"
-          echo "Version: ${MODULE_VER}"
-          echo "Output: ${FILENAME}.zip"
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+
+          if [ -n "$LAST_TAG" ]; then
+            LOG=$(git log "${LAST_TAG}..HEAD" --pretty=format:"- %s (\`%h\`)" --no-merges -- \
+              module.prop system.prop post-fs-data.sh service.sh \
+              customize.sh uninstall.sh 'webroot/*' 'META-INF/*')
+          else
+            LOG=$(git log --pretty=format:"- %s (\`%h\`)" --no-merges)
+          fi
+
+          if [ -z "$LOG" ]; then
+            LOG="- Initial release"
+          fi
+
+          # 写入多行输出
+          {
+            echo "log<<CHANGELOG_EOF"
+            echo "$LOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build flashable ZIP
         run: |
-          # 收集模块文件（排除非模块文件）
           MODULE_FILES=(
             META-INF/com/google/android/update-binary
             META-INF/com/google/android/updater-script
@@ -48,13 +224,20 @@ jobs:
           )
 
           OUTNAME="${{ steps.info.outputs.filename }}.zip"
-
-          # 使用 zip -9 最大 deflate 压缩
           zip -9 "$OUTNAME" "${MODULE_FILES[@]}"
 
-          echo "--- Build output ---"
-          ls -lh "$OUTNAME"
+          # 计算校验
+          SHA256=$(sha256sum "$OUTNAME" | cut -d' ' -f1)
+          SIZE=$(stat -c%s "$OUTNAME")
+          SIZE_KB=$(echo "scale=1; $SIZE / 1024" | bc)
+
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "size=${SIZE_KB} KB" >> "$GITHUB_OUTPUT"
+
+          echo "Built: $OUTNAME (${SIZE_KB} KB)"
+          echo "SHA256: $SHA256"
           unzip -t "$OUTNAME"
+        id: build
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -62,3 +245,67 @@ jobs:
           name: ${{ steps.info.outputs.filename }}
           path: ${{ steps.info.outputs.filename }}.zip
           compression-level: 0
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.info.outputs.tag_name }}
+          name: "🚀 ${{ steps.info.outputs.module_name }} ${{ steps.info.outputs.module_ver }}"
+          body: |
+            ## 📱 ${{ steps.info.outputs.module_name }}
+
+            > ${{ steps.info.outputs.module_desc }}
+
+            ---
+
+            ### 🎯 伪装目标
+
+            | 属性 | 值 |
+            |:---|:---|
+            | 营销名称 | **Xiaomi 17 Pro Max** |
+            | 型号号码 | `2509FPN0BC` |
+            | 设备代号 | `popsicle` |
+            | 品牌 | Xiaomi |
+            | HyperOS 3 版本号 | `OS3.0.45.0.WPBCNXM` |
+
+            ### ✅ 兼容性
+
+            | Root 方案 | 支持 |
+            |:---|:---:|
+            | Magisk (v20.4+) | ✅ |
+            | KernelSU | ✅ |
+            | APatch | ✅ |
+
+            | 系统版本 | 支持 |
+            |:---|:---:|
+            | MIUI 12 / 13 / 14 | ✅ |
+            | HyperOS 1.0 / 2.0 | ✅ |
+            | HyperOS 3.0 | ✅ (自动修改版本号) |
+
+            ### 📝 更新日志
+
+            ${{ steps.changelog.outputs.log }}
+
+            ### 📦 构建信息
+
+            | 项目 | 值 |
+            |:---|:---|
+            | 文件名 | `${{ steps.info.outputs.filename }}.zip` |
+            | 大小 | ${{ steps.build.outputs.size }} |
+            | SHA-256 | `${{ steps.build.outputs.sha256 }}` |
+            | Commit | [`${{ steps.info.outputs.short_sha }}`](https://github.com/${{ github.repository }}/commit/${{ steps.info.outputs.full_sha }}) |
+            | 构建时间 | ${{ steps.info.outputs.build_date }} |
+
+            ### 📥 安装方法
+
+            1. 下载下方 ZIP 文件
+            2. 打开 **Magisk / KernelSU / APatch** 管理器
+            3. 选择「从本地安装」→ 选中 ZIP 文件
+            4. 等待安装完成后 **重启设备**
+
+            > ⚠️ 如需恢复原始设备信息，在管理器中卸载本模块后重启即可。
+
+            ---
+            *Built with GitHub Actions · Powered by Sober UI*
+          files: ${{ steps.info.outputs.filename }}.zip
+          make_latest: true
