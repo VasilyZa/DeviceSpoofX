@@ -523,6 +523,7 @@
                     </label>
                 </div>
                 <div class="toggle-warn" id="adbRootWarn">注意：开启后 ADB 连接将短暂断开并重新建立，此为正常现象。重启后设置仍然生效。</div>
+                <div id="adbDiag" style="margin-top:10px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.72rem;color:var(--s-color-on-surface-variant,#666);line-height:1.8;display:none;"></div>
             </div>
         </s-card>
 
@@ -758,16 +759,36 @@ function updateAdbRootUI(enabled) {
     const cb = document.getElementById('adbRootCheckbox');
     const status = document.getElementById('adbRootStatus');
     const warn = document.getElementById('adbRootWarn');
+    const diag = document.getElementById('adbDiag');
     cb.checked = enabled;
     if (enabled) {
         status.textContent = '已开启';
         status.className = 'toggle-status on';
         warn.classList.add('show');
+        diag.style.display = 'block';
+        refreshAdbDiag();
     } else {
         status.textContent = '已关闭';
         status.className = 'toggle-status off';
         warn.classList.remove('show');
+        diag.style.display = 'none';
     }
+}
+
+async function refreshAdbDiag() {
+    const keys = ['ro.debuggable','ro.secure','ro.adb.secure','ro.build.type','service.adb.root'];
+    const vals = await getProps(keys);
+    const diag = document.getElementById('adbDiag');
+    diag.innerHTML = keys.map(k => {
+        const v = vals[k] || '(empty)';
+        const ok = (k === 'ro.debuggable' && v === '1') ||
+                   (k === 'ro.secure' && v === '0') ||
+                   (k === 'ro.adb.secure' && v === '0') ||
+                   (k === 'ro.build.type' && v === 'userdebug') ||
+                   (k === 'service.adb.root' && v === '1');
+        const color = ok ? '#2e7d32' : 'var(--s-color-error, #ba1a1a)';
+        return `<span style="color:${color}">${k} = ${v} ${ok ? '✓' : '✗'}</span>`;
+    }).join('<br>');
 }
 
 // resetprop 路径检测脚本 (与 post-fs-data.sh 一致)
@@ -787,15 +808,15 @@ async function toggleAdbRoot(enable) {
         const { errno, stderr } = await exec(`
             ${FIND_RESETPROP}
             echo 1 > "${MODULE_DIR}/adb_root_enabled"
-            $RP ro.debuggable 1
-            $RP ro.secure 0
-            $RP ro.adb.secure 0
-            $RP ro.build.type userdebug
+            $RP --delete ro.debuggable; $RP ro.debuggable 1
+            $RP --delete ro.secure; $RP ro.secure 0
+            $RP --delete ro.adb.secure; $RP ro.adb.secure 0
+            $RP --delete ro.build.type; $RP ro.build.type userdebug
             $RP service.adb.root 1
             setprop ctl.restart adbd
         `);
         if (errno === 0) {
-            showToast('ADB Root 已开启，重新连接 ADB 即可获取 root shell');
+            showToast('ADB Root 已开启，重新连接 ADB 即生效');
             updateAdbRootUI(true);
         } else {
             showToast('开启失败: ' + (stderr || 'resetprop 不可用'));
@@ -805,10 +826,10 @@ async function toggleAdbRoot(enable) {
         const { errno, stderr } = await exec(`
             ${FIND_RESETPROP}
             rm -f "${MODULE_DIR}/adb_root_enabled"
-            $RP ro.debuggable 0
-            $RP ro.secure 1
-            $RP ro.adb.secure 1
-            $RP ro.build.type user
+            $RP --delete ro.debuggable; $RP ro.debuggable 0
+            $RP --delete ro.secure; $RP ro.secure 1
+            $RP --delete ro.adb.secure; $RP ro.adb.secure 1
+            $RP --delete ro.build.type; $RP ro.build.type user
             $RP service.adb.root 0
             setprop ctl.restart adbd
         `);

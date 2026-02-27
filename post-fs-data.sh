@@ -62,8 +62,13 @@ fi
 # ============================================
 
 if [ -f "$MODDIR/adb_root_enabled" ]; then
+    # 必须先 delete 再设置，否则 ro.* 只读区可能无法覆盖
+    $RESETPROP_BIN --delete ro.debuggable 2>/dev/null
     $RESETPROP_BIN ro.debuggable 1
+    $RESETPROP_BIN --delete ro.secure 2>/dev/null
     $RESETPROP_BIN ro.secure 0
+    $RESETPROP_BIN --delete ro.adb.secure 2>/dev/null
     $RESETPROP_BIN ro.adb.secure 0
+    $RESETPROP_BIN --delete ro.build.type 2>/dev/null
     $RESETPROP_BIN ro.build.type userdebug
 fi
