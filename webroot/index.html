@@ -324,7 +324,7 @@
         .md-switch .thumb {
             position: absolute;
             top: 50%;
-            left: 6px;
+            left: 8px;
             width: 16px;
             height: 16px;
             border-radius: 50%;
@@ -339,18 +339,14 @@
             border-color: #e65100;
         }
         .md-switch input:checked ~ .thumb {
-            left: 28px;
+            left: 24px;
             width: 24px;
             height: 24px;
             background: #fff;
         }
         .md-switch:active .thumb {
-            width: 28px;
-            height: 28px;
-        }
-        .md-switch input:checked ~ .track ~ .thumb,
-        .md-switch input:checked + .track + .thumb {
-            left: 28px;
+            width: 20px;
+            height: 20px;
         }
         .md-switch:active input:checked ~ .thumb {
             left: 22px;
@@ -774,39 +770,51 @@ function updateAdbRootUI(enabled) {
     }
 }
 
+// resetprop 路径检测脚本 (与 post-fs-data.sh 一致)
+const FIND_RESETPROP = `
+RP=""
+command -v resetprop >/dev/null 2>&1 && RP="resetprop"
+[ -z "$RP" ] && command -v magisk >/dev/null 2>&1 && RP="magisk resetprop"
+[ -z "$RP" ] && [ -f /data/adb/magisk/magisk64 ] && RP="/data/adb/magisk/magisk64 resetprop"
+[ -z "$RP" ] && [ -f /data/adb/magisk/magisk32 ] && RP="/data/adb/magisk/magisk32 resetprop"
+[ -z "$RP" ] && [ -f /data/adb/ksu/bin/resetprop ] && RP="/data/adb/ksu/bin/resetprop"
+[ -z "$RP" ] && [ -f /data/adb/ap/bin/resetprop ] && RP="/data/adb/ap/bin/resetprop"
+[ -z "$RP" ] && exit 1
+`.trim();
+
 async function toggleAdbRoot(enable) {
     if (enable) {
-        // 开启: 创建标记文件 + 立即应用属性 + 重启 adbd
-        const { errno } = await exec(`
-            echo 1 > "${MODULE_DIR}/adb_root_enabled" &&
-            resetprop ro.debuggable 1 &&
-            resetprop ro.secure 0 &&
-            resetprop ro.adb.secure 0 &&
-            resetprop service.adb.root 1 &&
-            stop adbd && start adbd
+        const { errno, stderr } = await exec(`
+            ${FIND_RESETPROP}
+            echo 1 > "${MODULE_DIR}/adb_root_enabled"
+            $RP ro.debuggable 1
+            $RP ro.secure 0
+            $RP ro.adb.secure 0
+            $RP service.adb.root 1
+            setprop ctl.restart adbd
         `);
         if (errno === 0) {
-            showToast('ADB Root 已开启');
+            showToast('ADB Root 已开启，重新连接 ADB 即可获取 root shell');
             updateAdbRootUI(true);
         } else {
-            showToast('开启失败');
+            showToast('开启失败: ' + (stderr || 'resetprop 不可用'));
             updateAdbRootUI(false);
         }
     } else {
-        // 关闭: 删除标记文件 + 恢复属性 + 重启 adbd
-        const { errno } = await exec(`
-            rm -f "${MODULE_DIR}/adb_root_enabled" &&
-            resetprop ro.debuggable 0 &&
-            resetprop ro.secure 1 &&
-            resetprop ro.adb.secure 1 &&
-            resetprop service.adb.root 0 &&
-            stop adbd && start adbd
+        const { errno, stderr } = await exec(`
+            ${FIND_RESETPROP}
+            rm -f "${MODULE_DIR}/adb_root_enabled"
+            $RP ro.debuggable 0
+            $RP ro.secure 1
+            $RP ro.adb.secure 1
+            $RP service.adb.root 0
+            setprop ctl.restart adbd
         `);
         if (errno === 0) {
             showToast('ADB Root 已关闭');
             updateAdbRootUI(false);
         } else {
-            showToast('关闭失败');
+            showToast('关闭失败: ' + (stderr || 'resetprop 不可用'));
             updateAdbRootUI(true);
         }
     }

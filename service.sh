@@ -85,7 +85,10 @@ settings put global wifi_p2p_device_name "$TARGET_MARKETNAME"
 # ============================================
 
 if [ -f "$MODDIR/adb_root_enabled" ] && [ -n "$RESETPROP_BIN" ]; then
+    # 补充设置 (post-fs-data 可能未覆盖到的)
+    $RESETPROP_BIN ro.debuggable 1
+    $RESETPROP_BIN ro.secure 0
+    $RESETPROP_BIN ro.adb.secure 0
     $RESETPROP_BIN service.adb.root 1
-    stop adbd
-    start adbd
+    setprop ctl.restart adbd
 fi
