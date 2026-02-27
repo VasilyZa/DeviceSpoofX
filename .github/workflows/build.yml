@@ -223,10 +223,10 @@ jobs:
               echo "Mode: CI Build (no release)"
             fi
           else
-            # push 事件默认发布
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-            echo "is_ci=false" >> "$GITHUB_OUTPUT"
-            echo "Mode: Release (push trigger)"
+            # push 事件 → CI 构建，不发布 Release
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "is_ci=true" >> "$GITHUB_OUTPUT"
+            echo "Mode: CI Build (push trigger)"
           fi
 
       # ---- 获取模块信息 ----
