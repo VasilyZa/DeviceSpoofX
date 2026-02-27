@@ -93,7 +93,7 @@ if [ -f "$MODDIR/adb_root_enabled" ] && [ -n "$RESETPROP_BIN" ]; then
     $RESETPROP_BIN ro.adb.secure 0
     $RESETPROP_BIN --delete ro.build.type 2>/dev/null
     $RESETPROP_BIN ro.build.type userdebug
-    setprop ctl.restart adbd
-    sleep 1
+    stop adbd
     $RESETPROP_BIN service.adb.root 1
+    start adbd
 fi
