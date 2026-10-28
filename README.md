@@ -1,4 +1,5 @@
 # DeviceSpoofX
+# 早期黑历史，不建议使用
 
 将当前 Android 设备伪装为指定机型，通过 `resetprop` 在每次启动时直接注入系统属性，全面修改系统上报的设备型号、代号、品牌、营销名称、运行内存等信息。适配 MIUI 12 至 HyperOS 3，支持 Magisk / KernelSU / APatch 三大 Root 方案，提供 WebUI 管理界面。
 
